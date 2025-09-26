@@ -8,6 +8,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lumina Core Scripts -->
+    <script src="../js/database.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/dashboard-loader.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -53,7 +59,7 @@
         <!-- Sidebar (Static) -->
         <aside id="sidebar" class="w-64 flex-shrink-0 bg-white dark:bg-[#111111] border-r border-gray-200 dark:border-gray-800 flex flex-col transition-transform duration-300 ease-in-out -translate-x-full lg:translate-x-0 fixed lg:relative z-40 h-full">
             <div class="h-16 flex items-center justify-center border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
-                <a href="dashboard.html" class="text-2xl font-bold">
+                <a href="../index.html" class="text-2xl font-bold">
                     <span class="gradient-text">Lumina</span> ✨
                 </a>
             </div>
@@ -163,51 +169,58 @@
     </div>
 
     <script>
-        // --- DATA (Copied from source for self-containment) ---
-        const currentUser = { name: "Prof. Evelyn Reed (Admin)", avatar: "A", color: "bg-red-600", role: 'admin', id: 'er', status: 'active' }; 
-        
-        const allStudents = [
-            { name: "Sophia Chen", avatar: "S", color: "bg-teal-500", role: "student", id: "sc", status: 'active' },
-            { name: "Liam Harris", avatar: "L", color: "bg-purple-500", role: "student", id: "lh", status: 'suspended' },
-            { name: "Alex Turner", avatar: "A", color: "bg-amber-500", role: "student", id: "at", status: 'active' },
-            { name: "Maria Rodriguez", avatar: "M", color: "bg-red-500", role: "student", id: "mr", status: 'active' },
-            { name: "Kenji Tanaka", avatar: "K", color: "bg-blue-500", role: "student", id: "kt", status: 'active' },
-            { name: "Jane Doe (Teacher)", avatar: "J", color: "bg-green-600", role: "teacher", id: "jd", status: 'active' },
-        ];
-        
-        let allUsers = [...allStudents, { name: currentUser.name, avatar: currentUser.avatar, color: currentUser.color, role: currentUser.role, id: currentUser.id, status: currentUser.status }]
-             .filter(Boolean)
-             .filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+        // --- DYNAMIC DATA MANAGEMENT ---
+        let currentUser = null;
+        let allUsers = [];
+        let chatData = {};
+        let activeChatId = null;
 
-        let chatData = {
-            "qm": {
-                id: "qm",
-                name: "Quantum Mechanics",
-                description: "Discussion on Chapter 1: Core Principles",
-                teacherId: "er",
-                contentStatus: { vectorDB: '100%', pathways: '95%' },
-                members: [allUsers.find(u => u.id === 'er'), allUsers.find(u => u.id === 'sc'), allUsers.find(u => u.id === 'lh'), allUsers.find(u => u.id === 'at')].filter(Boolean),
-                unread: 0,
-                messages: [
-                    { sender: "Sophia Chen", text: "Hey everyone, I'm a bit stuck on question 3.", time: "10:30 AM" },
-                    { sender: "Prof. Evelyn Reed (Admin)", text: "The key is in the de Broglie wavelength formula we discussed.", time: "10:32 AM" },
-                    { sender: "Alex Turner", text: "That makes sense! Thanks, Professor!", time: "10:35 AM" },
-                ]
-            },
-            "thermo": {
-                id: "thermo",
-                name: "Thermodynamics",
-                description: "Midterm study group",
-                teacherId: "jd",
-                contentStatus: { vectorDB: '80%', pathways: '75%' },
-                members: [allUsers.find(u => u.id === 'er'), allUsers.find(u => u.id === 'at'), allUsers.find(u => u.id === 'lh'), allUsers.find(u => u.id === 'jd')].filter(Boolean),
-                unread: 1,
-                messages: [
-                    { sender: "Liam Harris", text: "Who's ready to cram for the midterm? 🔥", time: "Yesterday" },
-                    { sender: "Alex Turner", text: "Definitely. Let's start with the Second Law.", time: "Yesterday" },
-                ]
+        // Initialize data from database
+        async function loadData() {
+            try {
+                // Load current user
+                currentUser = await luminaAPI.getCurrentUser();
+                if (!currentUser) {
+                    luminaUI.redirectToLogin();
+                    return;
+                }
+
+                // Load all users
+                allUsers = await luminaAPI.getAllUsers();
+
+                // Load courses as chat data
+                const courses = await luminaAPI.getAllCourses();
+                chatData = {};
+                
+                for (const course of courses) {
+                    // Get course members with full user data
+                    const members = [];
+                    for (const memberId of course.members) {
+                        const member = allUsers.find(u => u.id === memberId);
+                        if (member) members.push(member);
+                    }
+
+                    // Get course messages
+                    const messages = await luminaAPI.getCourseMessages(course.id);
+
+                    chatData[course.id] = {
+                        id: course.id,
+                        name: course.name,
+                        description: course.description,
+                        teacherId: course.teacherId,
+                        contentStatus: course.contentStatus,
+                        members: members,
+                        unread: 0, // Calculate from last read timestamp in real app
+                        messages: messages
+                    };
+                }
+
+                console.log('Data loaded successfully:', { currentUser, allUsers, chatData });
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                luminaUI.showNotification('Failed to load data', 'error');
             }
-        };
+        }
 
         // --- GLOBAL DOM ELEMENTS ---
         const pageContentWrapper = document.getElementById('main-content');
@@ -227,40 +240,22 @@
         
         // --- HELPERS ---
         function openModal(modalEl, contentEl) {
-            modalEl.classList.remove('hidden');
-            setTimeout(() => contentEl.classList.remove('scale-95', 'opacity-0'), 10);
+            luminaUI.openModal(modalEl, contentEl);
         }
 
         function closeModal(modalEl, contentEl) {
-            contentEl.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => modalEl.classList.add('hidden'), 200);
+            luminaUI.closeModal(modalEl, contentEl);
         }
 
         function findUserById(id) {
             return allUsers.find(u => u.id === id) || null;
         }
 
-        function mockAction(action) {
-            console.log("Mock Action:", action);
-            const messageBox = document.createElement('div');
-            messageBox.className = 'fixed top-4 right-4 bg-green-500 text-white p-3 rounded-lg shadow-xl z-50 transition-all';
-            messageBox.textContent = `SUCCESS: ${action} (Simulated)`;
-            document.body.appendChild(messageBox);
-            setTimeout(() => messageBox.remove(), 3000);
-        }
+        // Removed mockAction - now using luminaUI.showNotification()
         
         // --- UI UTILITIES ---
         function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            
-            if (sidebar.classList.contains('-translate-x-full')) {
-                sidebar.classList.remove('-translate-x-full');
-                overlay.classList.remove('hidden');
-            } else {
-                sidebar.classList.add('-translate-x-full');
-                overlay.classList.add('hidden');
-            }
+            luminaUI.toggleSidebar();
         }
 
         function toggleMemberSidebar() {
@@ -399,18 +394,26 @@
             }
         }
 
-        function handleMessageFormSubmit(e) {
+        async function handleMessageFormSubmit(e) {
              e.preventDefault();
              const text = messageInput.value.trim();
              if (text && window.activeChatId) {
-                const newMessage = {
-                    sender: currentUser.name,
-                    text: text,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                chatData[window.activeChatId].messages.push(newMessage);
-                renderChat(window.activeChatId);
-                messageInput.value = '';
+                try {
+                    // Send message to database
+                    await luminaAPI.sendMessage(window.activeChatId, text);
+                    
+                    // Reload messages and re-render
+                    const messages = await luminaAPI.getCourseMessages(window.activeChatId);
+                    chatData[window.activeChatId].messages = messages;
+                    
+                    renderChat(window.activeChatId);
+                    messageInput.value = '';
+                    
+                    luminaUI.showNotification('Message sent', 'success', 1000);
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                    luminaUI.showNotification('Failed to send message', 'error');
+                }
              }
         }
 
@@ -469,34 +472,48 @@
             closeModal(addMembersModal, addMembersModalContent);
         }
 
-        function handleAddMembersFormSubmit(e) {
+        async function handleAddMembersFormSubmit(e) {
             e.preventDefault();
             const form = e.target;
             const selectedUserIds = Array.from(form.querySelectorAll('input[name="member"]:checked')).map(input => input.value);
             
             if (selectedUserIds.length > 0) {
-                const newMembers = selectedUserIds.map(id => allUsers.find(u => u.id === id)).filter(Boolean);
-                const currentGroup = chatData[window.activeChatId];
-                
-                // Add new members to the group, ensuring they are unique
-                const currentMemberIds = currentGroup.members.map(m => m.id);
-                newMembers.forEach(member => {
-                    if (!currentMemberIds.includes(member.id)) {
-                        currentGroup.members.push(member);
+                try {
+                    const currentGroup = chatData[window.activeChatId];
+                    
+                    // Add members to the course in database
+                    for (const userId of selectedUserIds) {
+                        await luminaAPI.addUserToCourse(window.activeChatId, userId);
                     }
-                });
-                
-                renderChat(window.activeChatId);
-                closeAddMembersModal();
-                mockAction(`Added ${newMembers.length} user(s) to ${currentGroup.name}.`);
+                    
+                    // Reload course data
+                    const updatedCourse = await luminaAPI.getCourseById(window.activeChatId);
+                    const members = [];
+                    for (const memberId of updatedCourse.members) {
+                        const member = allUsers.find(u => u.id === memberId);
+                        if (member) members.push(member);
+                    }
+                    
+                    chatData[window.activeChatId].members = members;
+                    
+                    renderChat(window.activeChatId);
+                    closeAddMembersModal();
+                    luminaUI.showNotification(`Added ${selectedUserIds.length} user(s) to ${currentGroup.name}`, 'success');
+                } catch (error) {
+                    console.error('Failed to add members:', error);
+                    luminaUI.showNotification('Failed to add members', 'error');
+                }
             } else {
-                mockAction("Please select at least one user to add.");
+                luminaUI.showNotification("Please select at least one user to add", 'warning');
             }
         }
         
         // --- INITIALIZATION ---
         
-        function initializeCommunityHub() {
+        async function initializeCommunityHub() {
+            // Load data from database first
+            await loadData();
+            if (!currentUser) return; // Redirected to login
             // Main content structure for the chat page
             const contentHTML = `
                 <div class="flex-1 flex overflow-hidden h-full">
@@ -555,36 +572,58 @@
 
         // --- Initialization Execution ---
         
-        document.getElementById('theme-toggle').addEventListener('click', function() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        });
-
         // Modal Listeners
         createGroupModal.querySelectorAll('.close-modal-btn').forEach(btn => btn.addEventListener('click', () => closeModal(createGroupModal, createGroupModalContent)));
-        createGroupForm.addEventListener('submit', (e) => {
+        createGroupForm.addEventListener('submit', async (e) => {
              e.preventDefault();
              const groupName = document.getElementById('group-name').value;
              const groupDesc = document.getElementById('group-description').value;
-             const newId = groupName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-             const teacher = allUsers.find(u => u.id === currentUser.id);
-
-             chatData[newId] = { 
-                 id: newId, name: groupName, description: groupDesc, teacherId: teacher.id,
-                 contentStatus: { vectorDB: '0%', pathways: '0%' },
-                 members: [currentUser], unread: 0, 
-                 messages: [{ sender: currentUser.name, text: "Group created! Welcome everyone.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }] 
-             };
-
-             window.activeChatId = newId;
-             initializeCommunityHub();
-             closeModal(createGroupModal, createGroupModalContent);
+             
+             try {
+                 // Create course in database
+                 const courseData = {
+                     name: groupName,
+                     description: groupDesc,
+                     teacherId: currentUser.id,
+                     members: [currentUser.id],
+                     contentStatus: { vectorDB: '0%', pathways: '0%' }
+                 };
+                 
+                 await luminaAPI.createCourse(courseData);
+                 
+                 // Send welcome message
+                 const courses = await luminaAPI.getAllCourses();
+                 const newCourse = courses.find(c => c.name === groupName);
+                 if (newCourse) {
+                     await luminaAPI.sendMessage(newCourse.id, "Group created! Welcome everyone.");
+                     window.activeChatId = newCourse.id;
+                 }
+                 
+                 // Reload and re-render
+                 await initializeCommunityHub();
+                 closeModal(createGroupModal, createGroupModalContent);
+                 
+                 luminaUI.showNotification(`Course "${groupName}" created successfully`, 'success');
+             } catch (error) {
+                 console.error('Failed to create course:', error);
+                 luminaUI.showNotification('Failed to create course', 'error');
+             }
         });
 
         addMembersModal.querySelectorAll('.close-add-members-modal-btn').forEach(btn => btn.addEventListener('click', closeAddMembersModal));
 
         // Start the application by rendering the Community Hub view
-        initializeCommunityHub();
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Wait for database to be ready
+            if (typeof luminaAPI !== 'undefined') {
+                await initializeCommunityHub();
+            } else {
+                // Wait a bit for scripts to load
+                setTimeout(async () => {
+                    await initializeCommunityHub();
+                }, 100);
+            }
+        });
     </script>
 </body>
 </html>

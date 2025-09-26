@@ -8,6 +8,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Dynamic Database System Scripts -->
+    <script src="../js/database.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/dashboard-loader.js"></script>
+    <script src="../js/data-manager.js"></script>
+    <script src="../js/dynamic-dashboard.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -16,6 +24,7 @@
         }
         .gradient-text {
             background: linear-gradient(to right, #f59e0b, #fbbf24);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -688,12 +697,79 @@
             renderAdminDashboard('course_management');
         }
 
-        // --- INITIALIZATION ---
+        // --- DYNAMIC INITIALIZATION ---
         
         document.getElementById('theme-toggle').addEventListener('click', function() {
             document.documentElement.classList.toggle('dark');
             localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
         });
+
+        // Data Management button (if exists)
+        const dataManagementBtn = document.getElementById('data-management-btn');
+        if (dataManagementBtn) {
+            dataManagementBtn.addEventListener('click', function() {
+                if (window.dataManager) {
+                    window.dataManager.openDataModal();
+                } else {
+                    console.error('Data Manager not loaded');
+                }
+            });
+        }
+
+        // Setup dynamic dashboard using database data
+        async function initDynamicDashboard() {
+            try {
+                console.log('Initializing dynamic admin dashboard...');
+                
+                // Wait for API and dashboard loader to be ready
+                let attempts = 0;
+                while (!window.luminaAPI && attempts < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    attempts++;
+                }
+                
+                if (window.luminaAPI && window.dashboardLoader && window.dashboardLoader.currentUser) {
+                    console.log('Loading dynamic admin data...');
+                    
+                    // Load real data from database
+                    const adminData = await window.dashboardLoader.loadAdminData();
+                    console.log('Admin data loaded:', adminData);
+                    
+                    // Replace static data with dynamic data
+                    if (adminData && adminData.courses) {
+                        // Update chatData with real course data
+                        const newChatData = {};
+                        adminData.courses.forEach(course => {
+                            newChatData[course.id] = {
+                                id: course.id,
+                                name: course.name || course.title,
+                                description: course.description,
+                                teacherId: course.teacherId,
+                                contentStatus: course.contentStatus || { vectorDB: '0%', pathways: '0%' },
+                                members: course.members || [],
+                                unread: course.unread || 0,
+                                messages: course.messages || []
+                            };
+                        });
+                        
+                        // Replace global chatData
+                        chatData = newChatData;
+                        console.log('Updated chatData with dynamic data:', Object.keys(chatData).length, 'courses');
+                    }
+                    
+                    // Re-render dashboard with dynamic data
+                    renderAdminDashboard();
+                    console.log('Dynamic admin dashboard initialized successfully');
+                } else {
+                    console.warn('Dashboard loader not ready, using static data');
+                    renderAdminDashboard();
+                }
+            } catch (error) {
+                console.error('Failed to initialize dynamic dashboard:', error);
+                // Fallback to static dashboard
+                renderAdminDashboard();
+            }
+        }
 
         editUserForm.addEventListener('submit', handleEditUserFormSubmit);
         editUserModal.querySelectorAll('.close-edit-user-modal-btn').forEach(btn => btn.addEventListener('click', closeEditUserModal));
@@ -701,7 +777,8 @@
         editCourseForm.addEventListener('submit', handleEditCourseFormSubmit);
         editCourseModal.querySelectorAll('.close-edit-course-modal-btn').forEach(btn => btn.addEventListener('click', closeEditCourseModal));
 
-        renderAdminDashboard();
+        // Initialize dashboard when everything is ready
+        setTimeout(initDynamicDashboard, 1500);
     </script>
 </body>
 </html>

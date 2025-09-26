@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="">
 <head>
-    <meta charset="UTF-8">
+    <meta set="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard - Lumina</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -9,6 +9,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lumina Core Scripts -->
+    <script src="../js/database.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/dashboard-loader.js"></script>
+    <script src="../js/dynamic-dashboard.js"></script>
     <style>
         html {
             scroll-behavior: smooth;
@@ -23,6 +30,7 @@
         }
         .gradient-text {
             background: linear-gradient(to right, #f59e0b, #fbbf24);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
