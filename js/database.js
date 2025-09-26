@@ -42,6 +42,7 @@ class LuminaDB {
                 if (!db.objectStoreNames.contains('messages')) {
                     const messageStore = db.createObjectStore('messages', { keyPath: 'id', autoIncrement: true });
                     messageStore.createIndex('courseId', 'courseId', { unique: false });
+                    messageStore.createIndex('roomId', 'roomId', { unique: false });
                     messageStore.createIndex('senderId', 'senderId', { unique: false });
                     messageStore.createIndex('timestamp', 'timestamp', { unique: false });
                 }
@@ -75,6 +76,14 @@ class LuminaDB {
                 // Sessions store (for current user session)
                 if (!db.objectStoreNames.contains('sessions')) {
                     const sessionStore = db.createObjectStore('sessions', { keyPath: 'id' });
+                }
+
+                // Chat Rooms store (for community groups/channels)
+                if (!db.objectStoreNames.contains('chatRooms')) {
+                    const chatStore = db.createObjectStore('chatRooms', { keyPath: 'id' });
+                    chatStore.createIndex('type', 'type', { unique: false }); // 'general', 'course', 'study-group'
+                    chatStore.createIndex('members', 'members', { unique: false, multiEntry: true });
+                    chatStore.createIndex('createdBy', 'createdBy', { unique: false });
                 }
             };
         });
@@ -218,6 +227,63 @@ class LuminaDB {
 
     async getCourseMessages(courseId) {
         return this.getByIndex('messages', 'courseId', courseId);
+    }
+
+    // Chat Room methods for community messaging
+    async createChatRoom(roomData) {
+        const room = {
+            id: roomData.id || `room_${Date.now()}`,
+            name: roomData.name,
+            description: roomData.description || '',
+            type: roomData.type || 'general', // 'general', 'course', 'study-group'
+            members: roomData.members || [],
+            createdBy: roomData.createdBy,
+            createdAt: new Date().toISOString(),
+            lastActivity: new Date().toISOString(),
+            avatar: roomData.avatar || '💬',
+            color: roomData.color || 'bg-blue-500'
+        };
+        return this.put('chatRooms', room);
+    }
+
+    async getAllChatRooms() {
+        return this.getAll('chatRooms');
+    }
+
+    async getChatRoom(roomId) {
+        return this.get('chatRooms', roomId);
+    }
+
+    async addChatMessage(roomId, senderId, text) {
+        const message = {
+            roomId: roomId,
+            senderId: senderId,
+            text: text,
+            timestamp: new Date().toISOString(),
+            type: 'text'
+        };
+        
+        // Update room's last activity
+        const room = await this.getChatRoom(roomId);
+        if (room) {
+            room.lastActivity = new Date().toISOString();
+            await this.put('chatRooms', room);
+        }
+        
+        return this.add('messages', message);
+    }
+
+    async getChatMessages(roomId) {
+        return this.getByIndex('messages', 'roomId', roomId);
+    }
+
+    async joinChatRoom(roomId, userId) {
+        const room = await this.getChatRoom(roomId);
+        if (room && !room.members.includes(userId)) {
+            room.members.push(userId);
+            await this.put('chatRooms', room);
+        }
+        return room;
     }
 
     // Progress tracking methods
@@ -534,6 +600,67 @@ class LuminaDB {
             streak: 12,
             struggling: false
         });
+
+        // Create default chat rooms
+        const defaultChatRooms = [
+            {
+                id: 'general',
+                name: 'General Discussion',
+                description: 'Welcome to Lumina! Chat with students and teachers from all subjects.',
+                type: 'general',
+                members: ['admin_001', 'teacher_001', 'student_001', 'student_002', 'student_003'],
+                createdBy: 'admin_001',
+                avatar: '💬',
+                color: 'bg-blue-500'
+            },
+            {
+                id: 'study_buddies',
+                name: 'Study Buddies',
+                description: 'Find study partners and form study groups!',
+                type: 'study-group',
+                members: ['student_001', 'student_002', 'student_003'],
+                createdBy: 'student_001',
+                avatar: '📚',
+                color: 'bg-green-500'
+            },
+            {
+                id: 'physics_help',
+                name: 'Physics Help Desk',
+                description: 'Get help with physics concepts and homework.',
+                type: 'course',
+                members: ['admin_001', 'teacher_001', 'student_001', 'student_002'],
+                createdBy: 'teacher_001',
+                avatar: '⚛️',
+                color: 'bg-purple-500'
+            },
+            {
+                id: 'announcements',
+                name: 'Announcements',
+                description: 'Important updates and announcements from teachers and admins.',
+                type: 'general',
+                members: ['admin_001', 'teacher_001', 'student_001', 'student_002', 'student_003'],
+                createdBy: 'admin_001',
+                avatar: '📢',
+                color: 'bg-amber-500'
+            }
+        ];
+
+        for (const room of defaultChatRooms) {
+            await this.createChatRoom(room);
+        }
+
+        // Add some sample messages to make it feel alive
+        const sampleMessages = [
+            { roomId: 'general', senderId: 'admin_001', text: 'Welcome to Lumina Community! 🎉 Feel free to introduce yourselves and connect with fellow learners.' },
+            { roomId: 'general', senderId: 'student_001', text: 'Hi everyone! Excited to be here. Looking forward to learning together! 📚' },
+            { roomId: 'study_buddies', senderId: 'student_002', text: 'Anyone want to form a study group for the upcoming physics exam?' },
+            { roomId: 'physics_help', senderId: 'teacher_001', text: 'Physics help desk is now open! Drop your questions here and I\'ll help you out. 🔬' },
+            { roomId: 'announcements', senderId: 'admin_001', text: '📢 New AI Tutor feature is now available! Check it out in the navigation menu.' }
+        ];
+
+        for (const msg of sampleMessages) {
+            await this.addChatMessage(msg.roomId, msg.senderId, msg.text);
+        }
 
         console.log('Initial data seeded successfully');
     }
