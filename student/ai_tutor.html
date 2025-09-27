@@ -3,7 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Tutor - Lumina</title>
+    <title>A                <!-- Quick Actions -->
+                <div class="bg-gray-50 dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 px-4 py-2">
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="sendQuickMessage('Explain a concept to me')" class="text-xs px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 rounded-full hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors">
+                            📚 Explain Concept
+                        </button>
+                        <button onclick="sendQuickMessage('Generate practice problems for me')" class="text-xs px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
+                            ✏️ Practice Problems
+                        </button>
+                        <button onclick="sendQuickMessage('Help me review my work')" class="text-xs px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-full hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors">
+                            ✅ Review Work
+                        </button>
+                        <button onclick="openApiKeySettings()" class="text-xs px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                            ⚙️ API Settings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Message Input -->
+                <div class="bg-white dark:bg-[#111111] border-t border-gray-200 dark:border-gray-800 p-4">
+                    <form id="message-input-form" class="relative">utor - Lumina</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,6 +34,9 @@
     <script src="../js/api.js"></script>
     <script src="../js/utils.js"></script>
     <script src="../js/dashboard-loader.js"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/gemini-ai.js"></script>
+    <script src="../js/fallback-ai.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -42,6 +65,30 @@
         }
          .chat-message-group:not(:first-child) .chat-avatar {
             visibility: hidden;
+        }
+
+        /* Typing indicator animation */
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .typing-indicator span {
+            height: 6px;
+            width: 6px;
+            background-color: #9ca3af;
+            border-radius: 50%;
+            display: inline-block;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
         }
     </style>
     <script>
@@ -162,12 +209,56 @@
         <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden" onclick="toggleSidebar()"></div>
     </div>
 
+    <!-- API Key Settings Modal -->
+    <div id="api-key-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Gemini AI Settings</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Enter your Gemini API key to enable AI tutoring features. You can get a free API key at:
+            </p>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-amber-600 hover:text-amber-700 text-sm font-medium">
+                https://aistudio.google.com/app/apikey ↗
+            </a>
+            
+            <div class="mt-4">
+                <label class="block text-sm font-medium mb-2 text-gray-900 dark:text-white">API Key:</label>
+                <input type="password" id="api-key-input" placeholder="Enter your Gemini API key..." 
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white">
+            </div>
+            
+            <div class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                <p>✅ Your API key is stored locally and never shared</p>
+                <p>✅ Free tier includes generous usage limits</p>
+            </div>
+            
+            <div class="flex gap-3 mt-6">
+                <button onclick="saveApiKey()" class="flex-1 bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 transition-colors">
+                    Save & Test
+                </button>
+                <button onclick="closeApiModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- DATA ---
         const currentUser = { name: "Alex Turner", avatar: "A", color: "bg-amber-500" };
         const aiTutor = { name: "AI Tutor", avatar: "✨", color: "bg-amber-500"};
         let chatHistory = [
-            { sender: aiTutor.name, text: "Hello Alex! I'm your personal AI Tutor. Feel free to ask me anything about your courses, or ask for practice problems.", time: "10:30 AM" },
+            { 
+                id: 'welcome-1',
+                sender: aiTutor.name, 
+                text: "Hello! I'm your AI Tutor. I'm here to help you with your studies! 🎓", 
+                time: "10:30 AM" 
+            },
+            { 
+                id: 'welcome-2',
+                sender: aiTutor.name, 
+                text: "I can help you with:<br>• Explaining complex concepts<br>• Generating practice problems<br>• Reviewing your work<br>• Answering questions across subjects<br><br>What would you like to learn about today?", 
+                time: "10:30 AM" 
+            },
         ];
 
         // --- DOM ELEMENTS ---
@@ -177,6 +268,29 @@
         const fileUpload = document.getElementById('file-upload');
         
         // --- FUNCTIONS ---
+        
+        // Convert markdown to HTML for better formatting
+        function formatMarkdown(text) {
+            return text
+                // Bold text **text** -> <strong>text</strong>
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic text *text* -> <em>text</em>
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Code blocks `code` -> <code>code</code>
+                .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-xs">$1</code>')
+                // Bullet points * item -> proper list
+                .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc">$1</li>')
+                // Convert line breaks to HTML
+                .replace(/\n/g, '<br>')
+                // Wrap consecutive list items in <ul>
+                .replace(/(<li[^>]*>.*<\/li>)/gs, '<ul class="my-2 space-y-1">$1</ul>')
+                // Clean up multiple <ul> tags
+                .replace(/<\/ul>\s*<br>\s*<ul[^>]*>/g, '')
+                // Add proper spacing around lists
+                .replace(/<ul/g, '<br><ul')
+                .replace(/<\/ul>/g, '</ul><br>');
+        }
+        
         function renderChat() {
             messagesContainer.innerHTML = '';
             let lastSender = null;
@@ -196,7 +310,7 @@
                             <div class="flex-1 flex flex-col items-end">
                                 ${!isContinuing ? `<p class="font-semibold text-sm">You <span class="text-xs text-gray-500 dark:text-gray-400 font-normal ml-2">${msg.time}</span></p>` : ''}
                                 <div class="mt-1 text-sm bg-amber-500 text-white p-3 rounded-lg ${isContinuing ? '' : 'rounded-br-none'} max-w-md">
-                                    ${msg.text}
+                                    ${formatMarkdown(msg.text)}
                                 </div>
                             </div>
                         </div>`;
@@ -209,7 +323,7 @@
                             <div>
                                 ${!isContinuing ? `<p class="font-semibold text-sm">${msg.sender}<span class="text-xs text-gray-500 dark:text-gray-400 font-normal ml-2">${msg.time}</span></p>` : ''}
                                 <div class="mt-1 text-sm bg-white dark:bg-[#1C1C1C] p-3 rounded-lg ${isContinuing ? '' : 'rounded-tl-none'} border border-gray-200 dark:border-gray-800 max-w-md">
-                                    ${msg.text}
+                                    ${formatMarkdown(msg.text)}
                                 </div>
                             </div>
                         </div>`;
@@ -219,8 +333,9 @@
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
-        function addMessage(sender, text) {
+        function addMessage(sender, text, messageId = null) {
             const newMessage = {
+                id: messageId || Date.now().toString(),
                 sender: sender,
                 text: text,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -229,18 +344,66 @@
             renderChat();
         }
 
+        function removeMessage(messageId) {
+            chatHistory = chatHistory.filter(msg => msg.id !== messageId);
+            renderChat();
+        }
+
+        // --- AI INTEGRATION ---
+        // Initialize fallback AI
+        const fallbackAI = new FallbackAI();
+        let useGeminiAI = true;
+        
+        async function sendMessageToAI(userMessage) {
+            const typingId = 'typing-' + Date.now();
+            addMessage(aiTutor.name, '<div class="flex items-center gap-1"><div class="typing-indicator"><span></span><span></span><span></span></div> Thinking...</div>', typingId);
+
+            try {
+                let response;
+                
+                if (useGeminiAI && window.geminiAI.isConfigured()) {
+                    try {
+                        // Try Gemini AI first
+                        response = await window.geminiAI.generateResponse(userMessage);
+                        console.log('✅ Using Gemini AI');
+                    } catch (geminiError) {
+                        console.warn('⚠️ Gemini AI failed, switching to fallback:', geminiError.message);
+                        useGeminiAI = false; // Disable Gemini for future requests
+                        response = await fallbackAI.generateResponse(userMessage);
+                        
+                        // Add a note about using fallback
+                        response = "📝 *Using offline AI mode* \n\n" + response;
+                    }
+                } else {
+                    // Use fallback AI
+                    console.log('📝 Using Fallback AI');
+                    response = await fallbackAI.generateResponse(userMessage);
+                    response = "📝 *Using offline AI mode* \n\n" + response;
+                }
+                
+                // Remove typing indicator and add response
+                removeMessage(typingId);
+                addMessage(aiTutor.name, response);
+
+            } catch (error) {
+                console.error('❌ All AI systems failed:', error);
+                removeMessage(typingId);
+                
+                addMessage(aiTutor.name, "I apologize, but I'm having technical difficulties right now. Please try refreshing the page or asking your question in a different way.");
+            }
+        }
+
         // --- EVENT LISTENERS ---
-        messageInputForm.addEventListener('submit', (e) => {
+        messageInputForm.addEventListener('submit', async (e) => {
              e.preventDefault();
              const text = messageInput.value.trim();
              if (text) {
+                // Add user message
                 addMessage(currentUser.name, text);
                 messageInput.value = '';
                 
-                // Simulate AI response
-                setTimeout(() => {
-                    addMessage(aiTutor.name, "That's a great question! Let me look into that for you. Based on your syllabus, the answer is likely related to the principles of wave-particle duality. Would you like me to elaborate?");
-                }, 1500);
+                // Get AI response
+                await sendMessageToAI(text);
              }
         });
 
@@ -252,6 +415,75 @@
                     addMessage(aiTutor.name, `Thanks for uploading "${fileName}". I'm analyzing the document now...`);
                 }, 1000);
             }
+        });
+
+        // --- QUICK ACTIONS ---
+        function sendQuickMessage(message) {
+            addMessage(currentUser.name, message);
+            sendMessageToAI(message);
+        }
+
+        function openApiKeySettings() {
+            const modal = document.getElementById('api-key-modal');
+            const input = document.getElementById('api-key-input');
+            
+            input.value = window.geminiAI.apiKey || '';
+            modal.classList.remove('hidden');
+            
+            // Focus on input after modal is shown
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function closeApiModal() {
+            document.getElementById('api-key-modal').classList.add('hidden');
+        }
+
+        async function saveApiKey() {
+            const input = document.getElementById('api-key-input');
+            const apiKey = input.value.trim();
+            
+            if (!apiKey) {
+                alert('Please enter an API key');
+                return;
+            }
+            
+            try {
+                // Test the API key by making a simple request
+                const testAI = new GeminiAI(apiKey);
+                await testAI.generateResponse('Hello, just testing the connection. Please respond with "Connection successful!"');
+                
+                // If successful, save the key
+                window.geminiAI.setApiKey(apiKey);
+                closeApiModal();
+                addMessage(aiTutor.name, "Perfect! Your API key is working. I'm ready to help you learn! 🚀✨");
+                
+            } catch (error) {
+                console.error('API key test failed:', error);
+                alert('API key test failed: ' + error.message + '\n\nPlease check your API key and try again.');
+            }
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('api-key-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'api-key-modal') {
+                closeApiModal();
+            }
+        });
+
+        // Handle Enter key in API key input
+        document.getElementById('api-key-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveApiKey();
+            }
+        });
+
+        // Auto-check API key on load (optional since we have default key)
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (!window.geminiAI.isConfigured()) {
+                    addMessage(aiTutor.name, "⚠️ AI service is not configured properly. Please contact support.");
+                }
+            }, 2000);
         });
 
         // --- THEME & SIDEBAR LOGIC ---

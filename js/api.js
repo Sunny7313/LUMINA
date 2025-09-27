@@ -149,6 +149,60 @@ class LuminaAPI {
         }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     }
 
+    // Chat Room management for community
+    async createChatRoom(roomData) {
+        const currentUser = await this.getCurrentUser();
+        if (!currentUser) throw new Error('User not authenticated');
+        
+        roomData.createdBy = currentUser.id;
+        if (!roomData.members) roomData.members = [currentUser.id];
+        
+        return this.db.createChatRoom(roomData);
+    }
+
+    async getAllChatRooms() {
+        return this.db.getAllChatRooms();
+    }
+
+    async getChatRoom(roomId) {
+        return this.db.getChatRoom(roomId);
+    }
+
+    async sendChatMessage(roomId, text) {
+        const currentUser = await this.getCurrentUser();
+        if (!currentUser) throw new Error('User not authenticated');
+        
+        return this.db.addChatMessage(roomId, currentUser.id, text);
+    }
+
+    async getChatMessages(roomId) {
+        const messages = await this.db.getChatMessages(roomId);
+        const users = await this.getAllUsers();
+        
+        // Enhance messages with user data
+        return messages.map(msg => {
+            const sender = users.find(u => u.id === msg.senderId);
+            return {
+                ...msg,
+                sender: sender ? sender.name : 'Unknown User',
+                senderAvatar: sender ? sender.avatar : '?',
+                senderColor: sender ? sender.color : 'bg-gray-500',
+                senderRole: sender ? sender.role : 'unknown',
+                time: new Date(msg.timestamp).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                })
+            };
+        }).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }
+
+    async joinChatRoom(roomId) {
+        const currentUser = await this.getCurrentUser();
+        if (!currentUser) throw new Error('User not authenticated');
+        
+        return this.db.joinChatRoom(roomId, currentUser.id);
+    }
+
     // Progress tracking
     async updateStudentProgress(studentId, courseId, progressData) {
         return this.db.updateProgress(studentId, courseId, progressData);
